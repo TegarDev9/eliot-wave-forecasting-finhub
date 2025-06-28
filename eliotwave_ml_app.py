@@ -54,9 +54,6 @@ class WavePattern:
 def find_pivots(data, left, right):
     """Menemukan titik pivot high dan low dalam data."""
     pivots = []
-    # Menggunakan shift untuk perbandingan yang lebih efisien
-    highs = (data['High'] > data['High'].shift(1)) & (data['High'] > data['High'].shift(-1))
-    lows = (data['Low'] < data['Low'].shift(1)) & (data['Low'] < data['Low'].shift(-1))
     
     for i in range(left, len(data) - right):
         is_pivot_high = data['High'][i] == data['High'][i-left:i+right+1].max()
