@@ -14,7 +14,7 @@ from dataclasses import dataclass
 # -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Analisis & Prediksi Finansial Hibrida",
-    page_icon="�",
+    page_icon="🌊",
     layout="wide"
 )
 
@@ -406,4 +406,3 @@ with tab_method:
     st.warning("""
     **DISCLAIMER PENTING:** Aplikasi ini adalah alat bantu analitis dan edukatif, **BUKAN SARAN KEUANGAN**. Kinerja masa lalu tidak menjamin hasil di masa depan. Selalu lakukan riset Anda sendiri dan kelola risiko dengan cermat.
     """, icon="⚠️")
-�
