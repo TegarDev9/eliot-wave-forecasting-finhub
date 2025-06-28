@@ -64,10 +64,8 @@ def find_pivots(data, left, right):
         elif is_pivot_low:
             pivots.append(Point(price=data['Low'][i], bar=i, time=data.index[i], rsiVal=data['RSI'][i]))
             
-    # Sortir pivot berdasarkan waktu untuk memastikan urutan yang benar
     pivots.sort(key=lambda p: p.time)
     
-    # Hapus pivot berturut-turut pada jenis yang sama (misalnya, dua high berturut-turut)
     unique_pivots = []
     if pivots:
         unique_pivots.append(pivots[0])
@@ -81,7 +79,6 @@ def find_pivots(data, left, right):
 
 def calculate_ew_score(p0, p1, p2, p3, p4, p5, isBull, isDiag, useNeowaveLogic, useRsiDivergence):
     """Menghitung skor kepercayaan untuk pola Elliott Wave yang diberikan."""
-    # Aturan Wajib Elliott Wave
     rule_w2_retraces_w1 = (p2.price < p1.price) if isBull else (p2.price > p1.price)
     rule_w2_not_exceed_w0 = (p2.price > p0.price) if isBull else (p2.price < p0.price)
     rule_w4_overlap = (p4.price < p1.price) if isBull else (p4.price > p1.price)
@@ -100,7 +97,6 @@ def calculate_ew_score(p0, p1, p2, p3, p4, p5, isBull, isDiag, useNeowaveLogic, 
     if not basic_structure_ok:
         return -1.0
 
-    # Penilaian berdasarkan Pedoman Fibonacci & lainnya
     current_score = 5.0
     len2 = abs(p2.price - p1.price)
     if len1 > 0:
@@ -109,13 +105,11 @@ def calculate_ew_score(p0, p1, p2, p3, p4, p5, isBull, isDiag, useNeowaveLogic, 
         if abs(len3 / len1 - 1.618) < 0.4: current_score += 1.5
         if abs(len5 / len1 - 1.0) < 0.4 or abs(len5 / len3 - 0.618) < 0.3: current_score += 1.0
 
-    # Divergensi RSI
     if useRsiDivergence:
         if (isBull and p5.price > p3.price and p5.rsiVal < p3.rsiVal) or \
            (not isBull and p5.price < p3.price and p5.rsiVal > p3.rsiVal):
             current_score += 2.0
             
-    # Logika NEoWave
     if useNeowaveLogic and len1 > 0:
         deep_w2 = (len2 / len1) > 0.618
         extended_w3 = (len3 / len1) > 1.618
@@ -244,7 +238,6 @@ tab_ew, tab_ml, tab_method = st.tabs(["**🌊 Prediksi Elliott Wave**", "**🤖 
 with tab_ew:
     st.header("Analisis Algoritmik Elliott Wave")
     
-    # --- Sidebar khusus EW ---
     with st.sidebar:
         with st.expander("🔬 Parameter Elliott Wave", expanded=True):
             ew_params = {
@@ -276,13 +269,11 @@ with tab_ew:
             except Exception as e:
                 st.error(f"Terjadi kesalahan saat analisis Elliott Wave: {e}")
 
-    # --- Tampilan Hasil EW ---
     if 'ew_pattern' in st.session_state and st.session_state.ew_pattern:
         pattern = st.session_state.ew_pattern
         pivots = st.session_state.ew_pivots
         ew_data = st.session_state.ew_data
         
-        # Dashboard
         col1, col2 = st.columns([3, 1])
         with col2:
             st.subheader("Ringkasan Pola")
@@ -305,7 +296,6 @@ with tab_ew:
                  st.metric("Take Profit (RR 1:{})".format(ew_params['reward_ratio_input']), f"{tp:,.2f}")
                  st.write(f"Ukuran Posisi: **{pos_size:,.4f} unit**")
         
-        # Grafik
         with col1:
             fig_ew = go.Figure(data=[go.Candlestick(x=ew_data.index, open=ew_data['Open'], high=ew_data['High'], low=ew_data['Low'], close=ew_data['Gold'], name="Harga")])
             
@@ -325,7 +315,7 @@ with tab_ew:
             st.plotly_chart(fig_ew, use_container_width=True)
 
     elif 'ew_pattern' in st.session_state and st.session_state.ew_pattern is None:
-         st.info(st.session_state.ew_pivots) # Menampilkan pesan error dari fungsi analisis
+         st.info(st.session_state.ew_pivots)
 
 # --- TAB 2: MACHINE LEARNING ---
 with tab_ml:
@@ -341,25 +331,23 @@ with tab_ml:
         featured_data = create_features(ml_raw_data)
         predictions, models, X_test, y_test = run_ml_prediction(featured_data, prediction_days)
         
-        last_close_price = featured_data['Gold'].iloc[-1]
+        # PERBAIKAN: Menggunakan .item() untuk mengekstrak nilai skalar
+        last_close_price = featured_data['Gold'].iloc[-1].item()
         
         future_dates = pd.to_datetime(pd.date_range(start=featured_data.index[-1], periods=prediction_days + 1, freq='B'))
         plot_data = featured_data.tail(90).copy()
         fig_ml = go.Figure()
 
-        # Area prediksi
         fig_ml.add_trace(go.Scatter(x=[plot_data.index[-1], future_dates[-1]], y=[last_close_price, predictions['upper']], fill=None, mode='lines', line_color='rgba(211,211,211,0.5)', name='Batas Atas'))
         fig_ml.add_trace(go.Scatter(x=[plot_data.index[-1], future_dates[-1]], y=[last_close_price, predictions['lower']], fill='tonexty', mode='lines', line_color='rgba(211,211,211,0.5)', name='Batas Bawah'))
-        # Garis harga historis dan prediksi
         fig_ml.add_trace(go.Scatter(x=plot_data.index, y=plot_data['Gold'], mode='lines', name='Harga Historis', line=dict(color='gold', width=3)))
         fig_ml.add_trace(go.Scatter(x=[plot_data.index[-1], future_dates[-1]], y=[last_close_price, predictions['median']], mode='lines+markers', name='Prediksi Median', line=dict(color='red', dash='dot', width=2), marker=dict(size=8, symbol='x')))
         
         fig_ml.update_layout(title=f'Proyeksi Harga Emas untuk {prediction_days} Hari ke Depan', template='plotly_dark')
         
-        # Tampilan hasil ML
         st.subheader("Ringkasan Prediksi")
         col1, col2, col3 = st.columns(3)
-        col1.metric("Proyeksi Harga (Median)", f"${predictions['median']:,.2f}", f"${predictions['median'] - last_close_price:,.2f}")
+        col1.metric("Proyeksi Harga (Median)", f"${predictions['median']:,.2f}", f"{predictions['median'] - last_close_price:,.2f}")
         col2.metric("Harga Penutupan Terakhir", f"${last_close_price:,.2f}")
         col3.metric("Horizon Waktu", f"{prediction_days} Hari")
         
