@@ -81,17 +81,22 @@ def _sanitize_price_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if df is None or df.empty:
         raise ValueError("Price data is empty; cannot perform Elliott Wave analysis.")
 
-    data = df.copy()
+    raw = df.copy()
+    sanitized = pd.DataFrame(index=raw.index)
 
-    for column in ["Open", "High", "Low"]:
-        series = _extract_column_as_series(data, column)
-        data[column] = pd.to_numeric(series, errors="coerce")
+    required_columns = ["Open", "High", "Low"]
+    for column in required_columns:
+        try:
+            series = _extract_column_as_series(raw, column)
+        except KeyError as exc:
+            raise KeyError(f"Required column '{column}' not found in price data.") from exc
+        sanitized[column] = pd.to_numeric(series, errors="coerce")
 
     close_candidates = ["Gold", "Close", "Adj Close"]
     gold_series = None
     for candidate in close_candidates:
         try:
-            series = _extract_column_as_series(data, candidate)
+            series = _extract_column_as_series(raw, candidate)
         except KeyError:
             continue
         if series.notna().any():
@@ -101,9 +106,29 @@ def _sanitize_price_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     if gold_series is None:
         raise KeyError("Unable to locate a valid closing price column for analysis.")
 
-    data["Gold"] = gold_series
-    data = data.loc[:, ~data.columns.duplicated()]
-    return data.dropna(subset=["Open", "High", "Low", "Gold"], how="any")
+    sanitized["Gold"] = gold_series
+    sanitized = sanitized.loc[:, ~sanitized.columns.duplicated()]
+    sanitized = sanitized.dropna(subset=["Open", "High", "Low", "Gold"], how="any")
+
+    if isinstance(raw.columns, pd.MultiIndex):
+        # Flatten any remaining columns from the original dataset for transparency/debugging
+        additional = {
+            "_".join(tuple(map(str, col))): raw[col]
+            for col in raw.columns
+            if "_".join(tuple(map(str, col))) not in sanitized.columns
+        }
+    else:
+        additional = {
+            str(col): raw[col]
+            for col in raw.columns
+            if str(col) not in sanitized.columns
+        }
+
+    if additional:
+        additional_df = pd.DataFrame(additional, index=raw.index)
+        sanitized = sanitized.join(additional_df, how="left")
+
+    return sanitized
 
 
 def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
