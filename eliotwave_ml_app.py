@@ -55,8 +55,64 @@ class WavePattern:
 # Utility indicators
 # -----------------------------------------------------------------------------
 
+def _extract_column_as_series(df: pd.DataFrame, column_name: str) -> pd.Series:
+    """Return a single Series for the requested column name, even when duplicates exist."""
+    if column_name in df.columns:
+        column_data = df[column_name]
+    elif isinstance(df.columns, pd.MultiIndex):
+        matches = [col for col in df.columns if isinstance(col, tuple) and col[-1] == column_name]
+        if not matches:
+            raise KeyError(f"Column '{column_name}' not found in price data.")
+        column_data = df[matches[0]]
+    else:
+        raise KeyError(f"Column '{column_name}' not found in price data.")
+
+    if isinstance(column_data, pd.DataFrame):
+        column_data = column_data.iloc[:, 0]
+
+    if not isinstance(column_data, pd.Series):
+        column_data = pd.Series(column_data, index=df.index, name=column_name)
+
+    return column_data
+
+
+def _sanitize_price_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure OHLC columns are one-dimensional Series suitable for analysis."""
+    if df is None or df.empty:
+        raise ValueError("Price data is empty; cannot perform Elliott Wave analysis.")
+
+    data = df.copy()
+
+    for column in ["Open", "High", "Low"]:
+        series = _extract_column_as_series(data, column)
+        data[column] = pd.to_numeric(series, errors="coerce")
+
+    close_candidates = ["Gold", "Close", "Adj Close"]
+    gold_series = None
+    for candidate in close_candidates:
+        try:
+            series = _extract_column_as_series(data, candidate)
+        except KeyError:
+            continue
+        if series.notna().any():
+            gold_series = pd.to_numeric(series, errors="coerce")
+            break
+
+    if gold_series is None:
+        raise KeyError("Unable to locate a valid closing price column for analysis.")
+
+    data["Gold"] = gold_series
+    data = data.loc[:, ~data.columns.duplicated()]
+    return data.dropna(subset=["Open", "High", "Low", "Gold"], how="any")
+
+
 def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     """Calculate the Relative Strength Index (RSI) with division-safe logic."""
+    if isinstance(series, pd.DataFrame):
+        if series.shape[1] != 1:
+            raise ValueError("RSI calculation expects a one-dimensional input series.")
+        series = series.iloc[:, 0]
+
     delta = series.diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -81,8 +137,8 @@ def find_pivots(data, left, right):
     """Identify high and low pivot points within the price series."""
     pivots = []
 
-    high_series = data['High']
-    low_series = data['Low']
+    high_series = _extract_column_as_series(data, 'High')
+    low_series = _extract_column_as_series(data, 'Low')
 
     for i in range(left, len(data) - right):
         window_slice = slice(i - left, i + right + 1)
@@ -162,6 +218,7 @@ def run_ew_analysis(data, params):
     }
     pivotLeft, pivotRight = pivot_params.get(params['trading_style'], (21, 13))
 
+    data = _sanitize_price_dataframe(data)
     data['RSI'] = calculate_rsi(data['Gold'])
 
     pivots = find_pivots(data, pivotLeft, pivotRight)
@@ -294,10 +351,11 @@ with tab_ew:
                     st.error("Failed to load data for the selected ticker. Please verify the symbol or date range.")
                 else:
                     ew_data = ew_data.rename(columns={'Close': 'Gold'}) # Generalize column name
-                    pattern, pivots = run_ew_analysis(ew_data, ew_params)
+                    sanitized_data = _sanitize_price_dataframe(ew_data)
+                    pattern, pivots = run_ew_analysis(sanitized_data, ew_params)
                     st.session_state.ew_pattern = pattern
                     st.session_state.ew_pivots = pivots
-                    st.session_state.ew_data = ew_data
+                    st.session_state.ew_data = sanitized_data
             except Exception as e:
                 st.error(f"An error occurred while running the Elliott Wave analysis: {e}")
 
