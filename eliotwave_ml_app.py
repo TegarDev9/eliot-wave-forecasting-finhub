@@ -81,14 +81,24 @@ def find_pivots(data, left, right):
     """Identify high and low pivot points within the price series."""
     pivots = []
 
+    high_series = data['High']
+    low_series = data['Low']
+
     for i in range(left, len(data) - right):
-        is_pivot_high = data['High'][i] == data['High'][i-left:i+right+1].max()
-        is_pivot_low = data['Low'][i] == data['Low'][i-left:i+right+1].min()
+        window_slice = slice(i - left, i + right + 1)
+
+        current_high = high_series.iloc[i]
+        current_low = low_series.iloc[i]
+        local_high = high_series.iloc[window_slice].max()
+        local_low = low_series.iloc[window_slice].min()
+
+        is_pivot_high = current_high == local_high
+        is_pivot_low = current_low == local_low
 
         if is_pivot_high:
-            pivots.append(Point(price=data['High'][i], bar=i, time=data.index[i], rsiVal=data['RSI'][i]))
+            pivots.append(Point(price=current_high, bar=i, time=data.index[i], rsiVal=data['RSI'].iloc[i]))
         elif is_pivot_low:
-            pivots.append(Point(price=data['Low'][i], bar=i, time=data.index[i], rsiVal=data['RSI'][i]))
+            pivots.append(Point(price=current_low, bar=i, time=data.index[i], rsiVal=data['RSI'].iloc[i]))
             
     pivots.sort(key=lambda p: p.time)
     
