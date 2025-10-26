@@ -37,6 +37,7 @@ class Point:
     time: any # pd.Timestamp
     rsiVal: float = 0.0
     volumeVal: float = 0.0
+    is_high: bool = False
 
 @dataclass
 class WavePattern:
@@ -177,21 +178,48 @@ def find_pivots(data, left, right):
         is_pivot_low = current_low == local_low
 
         if is_pivot_high:
-            pivots.append(Point(price=current_high, bar=i, time=data.index[i], rsiVal=data['RSI'].iloc[i]))
+            pivots.append(
+                Point(
+                    price=current_high,
+                    bar=i,
+                    time=data.index[i],
+                    rsiVal=data['RSI'].iloc[i],
+                    is_high=True,
+                )
+            )
         elif is_pivot_low:
-            pivots.append(Point(price=current_low, bar=i, time=data.index[i], rsiVal=data['RSI'].iloc[i]))
+            pivots.append(
+                Point(
+                    price=current_low,
+                    bar=i,
+                    time=data.index[i],
+                    rsiVal=data['RSI'].iloc[i],
+                    is_high=False,
+                )
+            )
             
     pivots.sort(key=lambda p: p.time)
     
     unique_pivots = []
-    if pivots:
-        unique_pivots.append(pivots[0])
-        for i in range(1, len(pivots)):
-            is_prev_high = pivots[i-1].price >= unique_pivots[-1].price
-            is_curr_high = pivots[i].price >= unique_pivots[-1].price
-            if (is_prev_high and not is_curr_high) or (not is_prev_high and is_curr_high):
-                 unique_pivots.append(pivots[i])
-                 
+    last_type = None
+    for pivot in pivots:
+        current_type = 'high' if pivot.is_high else 'low'
+
+        if not unique_pivots:
+            unique_pivots.append(pivot)
+            last_type = current_type
+            continue
+
+        if current_type == last_type:
+            prev = unique_pivots[-1]
+            if pivot.is_high and pivot.price > prev.price:
+                unique_pivots[-1] = pivot
+            elif not pivot.is_high and pivot.price < prev.price:
+                unique_pivots[-1] = pivot
+        else:
+            unique_pivots.append(pivot)
+            last_type = current_type
+
     return unique_pivots
 
 def calculate_ew_score(p0, p1, p2, p3, p4, p5, isBull, isDiag, useNeowaveLogic, useRsiDivergence):
